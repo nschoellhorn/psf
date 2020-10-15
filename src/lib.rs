@@ -1,6 +1,3 @@
-#[cfg(featue = "unzip")]
-use std::io::Read;
-
 pub struct Font {
     data: Vec<Vec<u8>>,
     width: usize,
@@ -46,11 +43,12 @@ impl Font {
             return Err(Error::Unknown);
         }
 
+        #[allow(unused_mut)]
         let mut data = std::fs::read(path)?;
         #[cfg(featue = "unzip")]
         {
-            let filename = filename.unwrap();
-            if filename.to_str().unwrap().ends_with(".gz") {
+            use std::io::Read;
+            if filename?.to_str()?.ends_with(".gz") {
                 // gunzip first
                 let mut gzd = flate2::read::GzDecoder::new(&data[..]);
                 let mut decoded_data = Vec::new();
@@ -221,8 +219,11 @@ fn get_data(data: &mut std::slice::Iter<u8>, count: usize) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use crate::*;
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn invalid_path() {
+        assert!(Font::new_from_str("blah").is_err());
+        assert!(Font::new(std::path::Path::new("foo")).is_err());
     }
 }

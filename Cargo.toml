@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["Piotr Zaczkowski <pzaczkowski@protonmail.com>"]
 edition = "2018"
 license = "MIT"
+description = "Allow to read psf fonts (including zipped ones)"
+repository = "https://github.com/zaczkows/psf"
+readme = "README.md"
+keywords = [ "psf", "console", "font" ]
 
 [features]
 # "unzip" is enabled by default
