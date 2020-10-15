@@ -1,0 +1,18 @@
+[package]
+name = "psf"
+version = "0.1.0"
+authors = ["Piotr Zaczkowski <pzaczkowski@protonmail.com>"]
+edition = "2018"
+license = "MIT"
+
+[features]
+# "unzip" is enabled by default
+default = [ "unzip" ]
+# optional features
+unzip = [ "flate2" ]
+
+[dependencies]
+
+[dependencies.flate2]
+version = "1.0.x"
+optional = true

@@ -1,2 +1,2 @@
 # psf
-Reads pdf font files with optional unzipping support
+Reads psf font files with optional unzipping support
