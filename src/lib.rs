@@ -7,9 +7,23 @@ pub struct Font {
 
 #[derive(Debug)]
 pub struct Vec2d<T> {
-    pub d: Vec<T>,
-    pub height: usize,
-    pub width: usize,
+    d: Vec<T>,
+    height: usize,
+    width: usize,
+}
+
+impl<T> Vec2d<T> {
+    pub fn data(&self) -> &Vec<T> {
+        &self.d
+    }
+
+    pub fn width(&self) -> usize {
+        self.width
+    }
+
+    pub fn height(&self) -> usize {
+        self.height
+    }
 }
 
 #[derive(Debug)]
@@ -45,10 +59,10 @@ impl Font {
 
         #[allow(unused_mut)]
         let mut data = std::fs::read(path)?;
-        #[cfg(featue = "unzip")]
+        #[cfg(feature = "unzip")]
         {
             use std::io::Read;
-            if filename?.to_str()?.ends_with(".gz") {
+            if filename.unwrap().to_str().unwrap().ends_with(".gz") {
                 // gunzip first
                 let mut gzd = flate2::read::GzDecoder::new(&data[..]);
                 let mut decoded_data = Vec::new();
@@ -173,10 +187,10 @@ impl Font {
             assert!(width <= byte_width * 8);
         }
 
-        println!(
-            "Parsing psf mode {} font file, with {} characters {} x {} (width x height) [bw={}]",
-            &mode, &number, &width, &height, &byte_width
-        );
+        // println!(
+        //     "Parsing psf mode {} font file, with {} characters {} x {} (width x height) [bw={}]",
+        //     &mode, &number, &width, &height, &byte_width
+        // );
 
         let mut vvv: Vec<Vec<u8>> = Vec::with_capacity(number as usize);
         for n in 0..number {
@@ -219,7 +233,7 @@ fn get_data(data: &mut std::slice::Iter<u8>, count: usize) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
+    use super::*;
 
     #[test]
     fn invalid_path() {
