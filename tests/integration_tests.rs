@@ -1,9 +1,12 @@
 use psf;
 
-fn is_empty(data: &Vec<u8>) -> bool {
-    for d in data.iter() {
-        if *d != 0 {
-            return false;
+fn is_empty(data: &psf::Glyph<u8>) -> bool {
+    for x in 0..data.width() {
+        for y in 0..data.height() {
+            assert!(data.get(x, y).is_some());
+            if data.get(x, y).unwrap() != 0 {
+                return false;
+            }
         }
     }
     true
@@ -35,7 +38,7 @@ fn read_consolefonts() {
             let c = c.unwrap();
             assert!(c.width() > 0);
             assert!(c.height() > 0);
-            assert!(!is_empty(&c.data()));
+            assert!(!is_empty(&c));
         }
     }
 }

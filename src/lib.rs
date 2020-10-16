@@ -1,3 +1,8 @@
+//! Reads psf (console) fonts. Exposes very simple interface for displaying
+//! the glyphs.
+
+/// Stores information about specific loaded font, including number of
+/// available characters, and each character width and height.
 pub struct Font {
     data: Vec<Vec<u8>>,
     width: usize,
@@ -5,32 +10,49 @@ pub struct Font {
     byte_width: usize,
 }
 
+/// Store information about specific glyph.
 #[derive(Debug)]
-pub struct Vec2d<T> {
+pub struct Glyph<T> {
     d: Vec<T>,
-    height: usize,
-    width: usize,
+    h: usize,
+    w: usize,
 }
 
-impl<T> Vec2d<T> {
-    pub fn data(&self) -> &Vec<T> {
-        &self.d
+impl<T: Copy> Glyph<T> {
+    /// Returns specific point of the glyph.
+    ///
+    /// `x` specifies the point from `0..self.width`
+    ///
+    /// `y` specifies the point from `0..self.height`
+    pub fn get(&self, x: usize, y: usize) -> Option<T> {
+        if x > self.w || y > self.h {
+            None
+        } else {
+            Some(self.d[y * self.w + x])
+        }
     }
 
+    /// Returns width of the glyph
     pub fn width(&self) -> usize {
-        self.width
+        self.w
     }
 
+    /// Returns height of the glyph
     pub fn height(&self) -> usize {
-        self.height
+        self.h
     }
 }
 
-#[derive(Debug)]
+/// Simple error type.
+#[derive(Debug, Copy, Clone)]
 pub enum Error {
+    /// Unspecified error for now
     Unknown,
+    /// File doesn't exists
     FileNotFound,
+    /// Failure to open and/or read the file itself
     FileIo,
+    /// Invalid or unsupported file format
     InvalidFontFormat,
 }
 
@@ -43,11 +65,11 @@ impl std::convert::From<std::io::Error> for Error {
 }
 
 impl Font {
-    pub fn new_from_str(path: &str) -> Result<Font, Error> {
-        Font::new(&std::path::Path::new(path))
+    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Font, Error> {
+        Font::_new(path.as_ref())
     }
 
-    pub fn new(path: &std::path::Path) -> Result<Font, Error> {
+    pub fn _new(path: &std::path::Path) -> Result<Font, Error> {
         if !path.exists() && !path.is_file() {
             return Err(Error::FileNotFound);
         }
@@ -62,7 +84,7 @@ impl Font {
         #[cfg(feature = "unzip")]
         {
             use std::io::Read;
-            if filename.unwrap().to_str().unwrap().ends_with(".gz") {
+            if data[0] == 0x1f && data[1] == 0x8b {
                 // gunzip first
                 let mut gzd = flate2::read::GzDecoder::new(&data[..]);
                 let mut decoded_data = Vec::new();
@@ -87,7 +109,7 @@ impl Font {
         self.data.len()
     }
 
-    pub fn get_char(&self, c: char) -> Option<Vec2d<u8>> {
+    pub fn get_char(&self, c: char) -> Option<Glyph<u8>> {
         let cn = c as usize;
         if cn > self.data.len() {
             return None;
@@ -103,25 +125,25 @@ impl Font {
             }
         }
 
-        Some(Vec2d {
+        Some(Glyph {
             d,
-            height: self.height,
-            width: self.width,
+            h: self.height,
+            w: self.width,
         })
     }
 
     pub fn print_char(&self, c: char) {
         let c = self.get_char(c).unwrap();
-        println!("{:-<1$}", "", c.width + 2);
-        for h in 0..c.height {
+        println!("{:-<1$}", "", c.width() + 2);
+        for h in 0..c.height() {
             print!("|");
-            for w in 0..c.width {
-                let what = if c.d[h * c.width + w] != 0 { "X" } else { " " };
+            for w in 0..c.width() {
+                let what = if c.get(w, h).unwrap() != 0 { "X" } else { " " };
                 print!("{}", what);
             }
             println!("|");
         }
-        println!("{:-<1$}", "", c.width + 2);
+        println!("{:-<1$}", "", c.width() + 2);
     }
 
     fn parse_font_data(raw_data: &[u8]) -> Result<Font, Error> {
@@ -237,7 +259,7 @@ mod tests {
 
     #[test]
     fn invalid_path() {
-        assert!(Font::new_from_str("blah").is_err());
+        assert!(Font::new("blah").is_err());
         assert!(Font::new(std::path::Path::new("foo")).is_err());
     }
 }
