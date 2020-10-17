@@ -1,5 +1,27 @@
 //! Reads psf (console) fonts. Exposes very simple interface for displaying
 //! the glyphs.
+//!
+//! Exposing of the glyph data is simple and easy to use:
+//! ```
+//! use psf::Font;
+//!
+//! let the_font = Font::new("<path>");
+//! if let Ok(font) = the_font {
+//!     let c = font.get_char('X');
+//!     if let Some(c) = c {
+//!         println!("{:-<1$}", "", c.width() + 2);
+//!         for h in 0..c.height() {
+//!            print!("|");
+//!            for w in 0..c.width() {
+//!                let what = if c.get(w, h).unwrap() != 0 { "X" } else { " " };
+//!                print!("{}", what);
+//!            }
+//!            println!("|");
+//!        }
+//!        println!("{:-<1$}", "", c.width() + 2);
+//!     }
+//! }
+//! ```
 
 /// Stores information about specific loaded font, including number of
 /// available characters, and each character width and height.
@@ -65,11 +87,12 @@ impl std::convert::From<std::io::Error> for Error {
 }
 
 impl Font {
+    /// Creates a new font for specific path.
     pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Font, Error> {
         Font::_new(path.as_ref())
     }
 
-    pub fn _new(path: &std::path::Path) -> Result<Font, Error> {
+    fn _new(path: &std::path::Path) -> Result<Font, Error> {
         if !path.exists() && !path.is_file() {
             return Err(Error::FileNotFound);
         }
@@ -96,10 +119,12 @@ impl Font {
         Font::parse_font_data(&data)
     }
 
+    /// Returns height of every glyph
     pub fn height(&self) -> usize {
         self.height
     }
 
+    /// Returns width of every glyph
     pub fn width(&self) -> usize {
         self.width
     }
@@ -109,6 +134,8 @@ impl Font {
         self.data.len()
     }
 
+    /// Returns [`Glyph`] data for specific character. If it's not present in the
+    /// font, [`None`] is returned.
     pub fn get_char(&self, c: char) -> Option<Glyph<u8>> {
         let cn = c as usize;
         if cn > self.data.len() {
@@ -132,6 +159,7 @@ impl Font {
         })
     }
 
+    /// Prints specified character to standard output using [`print!`]
     pub fn print_char(&self, c: char) {
         let c = self.get_char(c).unwrap();
         println!("{:-<1$}", "", c.width() + 2);
