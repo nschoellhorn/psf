@@ -1,10 +1,11 @@
 [package]
 name = "psf"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Piotr Zaczkowski <pzaczkowski@protonmail.com>"]
 edition = "2018"
 license = "MIT"
-description = "Allow to read psf fonts (including zipped ones)"
+description = "Allow to read psf fonts, including (optionally) zipped ones"
+documentation = "https://docs.rs/psf/"
 repository = "https://github.com/zaczkows/psf"
 readme = "README.md"
 keywords = [ "psf", "console", "font" ]
