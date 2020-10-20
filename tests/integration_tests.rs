@@ -1,10 +1,10 @@
 use psf;
 
-fn is_empty(data: &psf::Glyph<u8>) -> bool {
+fn is_empty(data: &psf::Glyph) -> bool {
     for x in 0..data.width() {
         for y in 0..data.height() {
             assert!(data.get(x, y).is_some());
-            if data.get(x, y).unwrap() != 0 {
+            if data.get(x, y).unwrap() {
                 return false;
             }
         }
@@ -30,15 +30,22 @@ fn read_consolefonts() {
             }
             let path = consolefonts_dir.join(&entry.path());
             println!("processed path: {:?}", &path);
-            let font = psf::Font::new(&path);
-            assert!(font.is_ok());
-            let font = font.unwrap();
-            let c = font.get_char('X');
-            assert!(c.is_some());
-            let c = c.unwrap();
-            assert!(c.width() > 0);
-            assert!(c.height() > 0);
-            assert!(!is_empty(&c));
+            let oc;
+            {
+                let font = psf::Font::new(&path);
+                assert!(font.is_ok());
+                let font = font.unwrap();
+                let c = font.get_char('X');
+                assert!(c.is_some());
+                let c = c.unwrap();
+                assert!(c.width() > 0);
+                assert!(c.height() > 0);
+                assert!(!is_empty(&c));
+                oc = font.get_char_owned('X');
+            }
+            assert!(oc.is_some());
+            let oc = oc.unwrap();
+            assert!(!is_empty(&oc));
         }
     }
 }

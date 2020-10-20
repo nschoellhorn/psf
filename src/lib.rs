@@ -13,7 +13,7 @@
 //!         for h in 0..c.height() {
 //!            print!("|");
 //!            for w in 0..c.width() {
-//!                let what = if c.get(w, h).unwrap() != 0 { "X" } else { " " };
+//!                let what = if c.get(w, h).unwrap() { "X" } else { " " };
 //!                print!("{}", what);
 //!            }
 //!            println!("|");
@@ -26,31 +26,44 @@
 /// Stores information about specific loaded font, including number of
 /// available characters, and each character width and height.
 pub struct Font {
-    data: Vec<Vec<u8>>,
+    raw_data: Vec<u8>,
+    font_data_offset: usize,
+    count: usize,
     width: usize,
     height: usize,
     byte_width: usize,
 }
 
 /// Store information about specific glyph.
-#[derive(Debug)]
-pub struct Glyph<T> {
-    d: Vec<T>,
+// #[derive(Debug)]
+pub struct Glyph<'a> {
+    d: GlyphData<'a>,
     h: usize,
     w: usize,
+    bw: usize,
 }
 
-impl<T: Copy> Glyph<T> {
-    /// Returns specific point of the glyph.
+enum GlyphData<'a> {
+    ByCopy(Vec<u8>),
+    ByRef(&'a [u8]),
+}
+
+impl<'a> Glyph<'a> {
+    /// Returns if specific point is set (`true`) or not (`false`).
     ///
     /// `x` specifies the point from `0..self.width`
     ///
     /// `y` specifies the point from `0..self.height`
-    pub fn get(&self, x: usize, y: usize) -> Option<T> {
+    pub fn get(&self, x: usize, y: usize) -> Option<bool> {
         if x > self.w || y > self.h {
             None
         } else {
-            Some(self.d[y * self.w + x])
+            let bit = match &self.d {
+                GlyphData::ByCopy(d) => d[y * self.bw + x / 8],
+                GlyphData::ByRef(d) => d[y * self.bw + x / 8],
+            };
+            // let bit = self.d[y * self.bw + x / 8];
+            Some((bit >> (7 - (x % 8)) & 0b1) != 0)
         }
     }
 
@@ -116,7 +129,7 @@ impl Font {
             }
         }
 
-        Font::parse_font_data(&data)
+        Font::parse_font_data(data)
     }
 
     /// Returns height of every glyph
@@ -131,34 +144,45 @@ impl Font {
 
     /// Returns number of available characters in the font
     pub fn size(&self) -> usize {
-        self.data.len()
+        self.count
     }
 
     /// Returns [`Glyph`] data for specific character. If it's not present in the
     /// font, [`None`] is returned.
-    pub fn get_char(&self, c: char) -> Option<Glyph<u8>> {
+    pub fn get_char(&self, c: char) -> Option<Glyph> {
         let cn = c as usize;
-        if cn > self.data.len() {
+        if cn > self.count {
             return None;
         }
 
-        let mut d = Vec::with_capacity(self.data[cn].len() * (self.byte_width * 8));
-
-        let row = &self.data[cn];
-        for h in 0..self.height {
-            for bit in 0..self.width {
-                let bbb = row[h * self.byte_width + bit / 8];
-                d.push((bbb >> (7 - (bit % 8))) & 0b1);
-            }
-        }
-
+        let char_byte_length = self.height * self.byte_width;
+        let offset = self.font_data_offset + cn * char_byte_length;
         Some(Glyph {
-            d,
+            d: GlyphData::ByRef(&self.raw_data[offset..offset + char_byte_length]),
             h: self.height,
             w: self.width,
+            bw: self.byte_width,
         })
     }
 
+    /// Returns [`Glyph`] data for specific character. If it's not present in the
+    /// font, [`None`] is returned. Contains copy of the data, so can be used even when
+    /// [`Font`] is destroyed.
+    pub fn get_char_owned<'b>(&self, c: char) -> Option<Glyph<'b>> {
+        let cn = c as usize;
+        if cn > self.count {
+            return None;
+        }
+
+        let char_byte_length = self.height * self.byte_width;
+        let offset = self.font_data_offset + cn * char_byte_length;
+        Some(Glyph {
+            d: GlyphData::ByCopy(self.raw_data[offset..offset + char_byte_length].to_vec()),
+            h: self.height,
+            w: self.width,
+            bw: self.byte_width,
+        })
+    }
     /// Prints specified character to standard output using [`print!`]
     pub fn print_char(&self, c: char) {
         let c = self.get_char(c).unwrap();
@@ -166,7 +190,7 @@ impl Font {
         for h in 0..c.height() {
             print!("|");
             for w in 0..c.width() {
-                let what = if c.get(w, h).unwrap() != 0 { "X" } else { " " };
+                let what = if c.get(w, h).unwrap() { "X" } else { " " };
                 print!("{}", what);
             }
             println!("|");
@@ -174,7 +198,7 @@ impl Font {
         println!("{:-<1$}", "", c.width() + 2);
     }
 
-    fn parse_font_data(raw_data: &[u8]) -> Result<Font, Error> {
+    fn parse_font_data(raw_data: Vec<u8>) -> Result<Font, Error> {
         if raw_data.is_empty() {
             return Err(Error::InvalidFontFormat);
         }
@@ -182,7 +206,7 @@ impl Font {
         let height;
         let width;
         let byte_width;
-        let number: u32;
+        let count: u32;
         let mut data = raw_data.iter();
         let mode = match *data.next().unwrap() {
             0x36 => 1,
@@ -196,7 +220,7 @@ impl Font {
             if *data.next().unwrap() != 0x04 {
                 return Err(Error::InvalidFontFormat);
             }
-            number = match *data.next().unwrap() {
+            count = match *data.next().unwrap() {
                 0 => 256,
                 1 => 512,
                 2 => 256,
@@ -225,7 +249,7 @@ impl Font {
                 return Err(Error::InvalidFontFormat);
             }
             let _flags = get_data(&mut data, 4);
-            number = *data.next().unwrap() as u32 + *data.next().unwrap() as u32 * 256;
+            count = *data.next().unwrap() as u32 + *data.next().unwrap() as u32 * 256;
             let no_chars = as_le_u16(&mut data);
             if no_chars as u32 > 64 * 1024 {
                 return Err(Error::InvalidFontFormat);
@@ -239,10 +263,10 @@ impl Font {
 
         // println!(
         //     "Parsing psf mode {} font file, with {} characters {} x {} (width x height) [bw={}]",
-        //     &mode, &number, &width, &height, &byte_width
+        //     &mode, &count, &width, &height, &byte_width
         // );
 
-        let mut vvv: Vec<Vec<u8>> = Vec::with_capacity(number as usize);
+        /*let mut vvv: Vec<Vec<u8>> = Vec::with_capacity(number as usize);
         for n in 0..number {
             vvv.push(Vec::with_capacity(height as usize * byte_width as usize));
             for _ in 0..height {
@@ -251,10 +275,18 @@ impl Font {
                 }
             }
             assert_eq!(vvv[n as usize].len(), height as usize * byte_width as usize);
-        }
+        }*/
 
+        let font_data_offset = raw_data.len() - data.as_slice().len();
+        if mode == 1 {
+            assert_eq!(font_data_offset, 4);
+        } else {
+            assert_eq!(font_data_offset, 32);
+        }
         Ok(Font {
-            data: vvv,
+            raw_data,
+            font_data_offset,
+            count: count as usize,
             width: width as usize,
             height: height as usize,
             byte_width: byte_width as usize,
