@@ -261,22 +261,6 @@ impl Font {
             assert!(width <= byte_width * 8);
         }
 
-        // println!(
-        //     "Parsing psf mode {} font file, with {} characters {} x {} (width x height) [bw={}]",
-        //     &mode, &count, &width, &height, &byte_width
-        // );
-
-        /*let mut vvv: Vec<Vec<u8>> = Vec::with_capacity(number as usize);
-        for n in 0..number {
-            vvv.push(Vec::with_capacity(height as usize * byte_width as usize));
-            for _ in 0..height {
-                for _ in 0..byte_width {
-                    vvv[n as usize].push(*data.next().unwrap());
-                }
-            }
-            assert_eq!(vvv[n as usize].len(), height as usize * byte_width as usize);
-        }*/
-
         let font_data_offset = raw_data.len() - data.as_slice().len();
         if mode == 1 {
             assert_eq!(font_data_offset, 4);
@@ -321,5 +305,30 @@ mod tests {
     fn invalid_path() {
         assert!(Font::new("blah").is_err());
         assert!(Font::new(std::path::Path::new("foo")).is_err());
+    }
+
+    #[test]
+    fn data_convert_u32() {
+        let data: Vec<u8> = vec![0x22u8, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99];
+        let mut it = data.iter();
+        assert_eq!(0x55443322, as_le_u32(&mut it));
+        assert_eq!(0x99887766, as_le_u32(&mut it));
+    }
+
+    #[test]
+    fn data_convert_u16() {
+        let data: Vec<u8> = vec![0x22u8, 0x33, 0x44, 0x55];
+        let mut it = data.iter();
+        assert_eq!(0x3322, as_le_u16(&mut it));
+        assert_eq!(0x5544, as_le_u16(&mut it));
+    }
+
+    #[test]
+    fn test_get_data() {
+        let data: Vec<u8> = vec![0x22u8, 0x33, 0x44, 0x55, 0x66, 0x77];
+        let mut it = data.iter();
+        assert_eq!(vec![0x22u8, 0x33, 0x44], get_data(&mut it, 3));
+        assert_eq!(vec![0x55u8], get_data(&mut it, 1));
+        assert_eq!(vec![0x66u8, 0x77], get_data(&mut it, 2));
     }
 }
