@@ -1,3 +1,5 @@
+#![no_std]
+#![feature(iter_advance_by)]
 //! Reads psf (console) fonts. Exposes very simple interface for displaying
 //! the glyphs.
 //!
@@ -25,8 +27,9 @@
 
 /// Stores information about specific loaded font, including number of
 /// available characters, and each character width and height.
-pub struct Font {
-    raw_data: Vec<u8>,
+#[derive(Debug)]
+pub struct Font<'a> {
+    raw_data: &'a [u8],
     font_data_offset: usize,
     count: usize,
     width: usize,
@@ -44,7 +47,6 @@ pub struct Glyph<'a> {
 }
 
 enum GlyphData<'a> {
-    ByCopy(Vec<u8>),
     ByRef(&'a [u8]),
 }
 
@@ -59,7 +61,6 @@ impl<'a> Glyph<'a> {
             None
         } else {
             let bit = match &self.d {
-                GlyphData::ByCopy(d) => d[y * self.bw + x / 8],
                 GlyphData::ByRef(d) => d[y * self.bw + x / 8],
             };
             // let bit = self.d[y * self.bw + x / 8];
@@ -88,20 +89,14 @@ pub enum Error {
     /// Failure to open and/or read the file itself
     FileIo,
     /// Invalid or unsupported file format
-    InvalidFontFormat,
+    InvalidFontFormat(&'static str),
+
+    InvalidOffset(u32),
 }
 
-impl std::convert::From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        match e {
-            _ => Error::FileIo,
-        }
-    }
-}
-
-impl Font {
+impl<'a> Font<'a> {
     /// Creates a new font for specific path.
-    pub fn new<P: AsRef<std::path::Path>>(path: P) -> Result<Font, Error> {
+    /*pub fn new<P: AsRef<std::path::Path> + 'a>(path: P) -> Result<Font<'a>, Error> {
         Font::_new(path.as_ref())
     }
 
@@ -129,8 +124,8 @@ impl Font {
             }
         }
 
-        Font::parse_font_data(data)
-    }
+        Font::parse_font_data(data.as_slice())
+    }*/
 
     /// Returns height of every glyph
     pub fn height(&self) -> usize {
@@ -168,7 +163,7 @@ impl Font {
     /// Returns [`Glyph`] data for specific character. If it's not present in the
     /// font, [`None`] is returned. Contains copy of the data, so can be used even when
     /// [`Font`] is destroyed.
-    pub fn get_char_owned<'b>(&self, c: char) -> Option<Glyph<'b>> {
+    /*pub fn get_char_owned<'b>(&self, c: char) -> Option<Glyph<'b>> {
         let cn = c as usize;
         if cn > self.count {
             return None;
@@ -182,25 +177,11 @@ impl Font {
             w: self.width,
             bw: self.byte_width,
         })
-    }
-    /// Prints specified character to standard output using [`print!`]
-    pub fn print_char(&self, c: char) {
-        let c = self.get_char(c).unwrap();
-        println!("{:-<1$}", "", c.width() + 2);
-        for h in 0..c.height() {
-            print!("|");
-            for w in 0..c.width() {
-                let what = if c.get(w, h).unwrap() { "X" } else { " " };
-                print!("{}", what);
-            }
-            println!("|");
-        }
-        println!("{:-<1$}", "", c.width() + 2);
-    }
+    }*/
 
-    fn parse_font_data(raw_data: Vec<u8>) -> Result<Font, Error> {
+    pub fn parse_font_data(raw_data: &[u8]) -> Result<Font, Error> {
         if raw_data.is_empty() {
-            return Err(Error::InvalidFontFormat);
+            return Err(Error::InvalidFontFormat("Empty"));
         }
 
         let height;
@@ -211,48 +192,48 @@ impl Font {
         let mode = match *data.next().unwrap() {
             0x36 => 1,
             0x72 => 2,
-            _ => return Err(Error::InvalidFontFormat),
+            _ => return Err(Error::InvalidFontFormat("invalid mode")),
         };
         if mode == 1 {
             if raw_data.len() < 4 {
-                return Err(Error::InvalidFontFormat);
+                return Err(Error::InvalidFontFormat("mode 1, too small"));
             }
             if *data.next().unwrap() != 0x04 {
-                return Err(Error::InvalidFontFormat);
+                return Err(Error::InvalidFontFormat("mode 1, magic number"));
             }
             count = match *data.next().unwrap() {
                 0 => 256,
                 1 => 512,
                 2 => 256,
                 3 => 512,
-                _ => return Err(Error::InvalidFontFormat),
+                _ => return Err(Error::InvalidFontFormat("mode 1, invalid count")),
             };
             height = *data.next().unwrap();
             width = 8;
             byte_width = 1;
         } else {
             if raw_data.len() < 32 {
-                return Err(Error::InvalidFontFormat);
+                return Err(Error::InvalidFontFormat("mode != 1, too small"));
             }
             if *data.next().unwrap() != 0xb5
                 || *data.next().unwrap() != 0x4a
                 || *data.next().unwrap() != 0x86
             {
-                return Err(Error::InvalidFontFormat);
+                return Err(Error::InvalidFontFormat("mode != 1, magic number"));
             }
             let version = get_data(&mut data, 4);
             if version != [0, 0, 0, 0] {
-                return Err(Error::InvalidFontFormat);
+                return Err(Error::InvalidFontFormat("mode != 1, version"));
             }
             let offset = as_le_u32(&mut data);
             if offset != 0x20 {
-                return Err(Error::InvalidFontFormat);
+                return Err(Error::InvalidOffset(offset));
             }
             let _flags = get_data(&mut data, 4);
             count = *data.next().unwrap() as u32 + *data.next().unwrap() as u32 * 256;
             let no_chars = as_le_u16(&mut data);
             if no_chars as u32 > 64 * 1024 {
-                return Err(Error::InvalidFontFormat);
+                return Err(Error::InvalidFontFormat("no chars"));
             }
             let _sizeof_char = as_le_u32(&mut data);
             height = as_le_u32(&mut data) as u8;
@@ -278,57 +259,20 @@ impl Font {
     }
 }
 
-fn as_le_u32(data: &mut std::slice::Iter<u8>) -> u32 {
+fn as_le_u32(data: &mut core::slice::Iter<u8>) -> u32 {
     (*data.next().unwrap() as u32)
         | (*data.next().unwrap() as u32) << 8
         | (*data.next().unwrap() as u32) << 16
         | (*data.next().unwrap() as u32) << 24
 }
 
-fn as_le_u16(data: &mut std::slice::Iter<u8>) -> u16 {
+fn as_le_u16(data: &mut core::slice::Iter<u8>) -> u16 {
     (*data.next().unwrap() as u16) | (*data.next().unwrap() as u16) << 8
 }
 
-fn get_data(data: &mut std::slice::Iter<u8>, count: usize) -> Vec<u8> {
-    let mut v = Vec::with_capacity(count);
-    for _ in 0..count {
-        v.push(*data.next().unwrap());
-    }
-    v
-}
+fn get_data<'a>(data: &'a mut core::slice::Iter<u8>, count: usize) -> &'a [u8] {
+    let data_slice = &data.as_slice()[..count];
+    data.advance_by(count).expect("Failed to advance iter");
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn invalid_path() {
-        assert!(Font::new("blah").is_err());
-        assert!(Font::new(std::path::Path::new("foo")).is_err());
-    }
-
-    #[test]
-    fn data_convert_u32() {
-        let data: Vec<u8> = vec![0x22u8, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99];
-        let mut it = data.iter();
-        assert_eq!(0x55443322, as_le_u32(&mut it));
-        assert_eq!(0x99887766, as_le_u32(&mut it));
-    }
-
-    #[test]
-    fn data_convert_u16() {
-        let data: Vec<u8> = vec![0x22u8, 0x33, 0x44, 0x55];
-        let mut it = data.iter();
-        assert_eq!(0x3322, as_le_u16(&mut it));
-        assert_eq!(0x5544, as_le_u16(&mut it));
-    }
-
-    #[test]
-    fn test_get_data() {
-        let data: Vec<u8> = vec![0x22u8, 0x33, 0x44, 0x55, 0x66, 0x77];
-        let mut it = data.iter();
-        assert_eq!(vec![0x22u8, 0x33, 0x44], get_data(&mut it, 3));
-        assert_eq!(vec![0x55u8], get_data(&mut it, 1));
-        assert_eq!(vec![0x66u8, 0x77], get_data(&mut it, 2));
-    }
+    data_slice
 }

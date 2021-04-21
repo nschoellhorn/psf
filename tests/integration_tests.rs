@@ -12,7 +12,7 @@ fn is_empty(data: &psf::Glyph) -> bool {
     true
 }
 
-#[cfg(unix)]
+/*#[cfg(unix)]
 #[test]
 fn read_consolefonts() {
     use std::fs::read_dir;
@@ -48,4 +48,4 @@ fn read_consolefonts() {
             assert!(!is_empty(&oc));
         }
     }
-}
+}*/
