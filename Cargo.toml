@@ -19,5 +19,5 @@ unzip = [ "flate2" ]
 [dependencies]
 
 [dependencies.flate2]
-version = "1.0.x"
+version = "1.0"
 optional = true
